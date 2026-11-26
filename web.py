@@ -1,4 +1,6 @@
 import re
+from fractions import Fraction
+
 import numpy as np
 import sympy as sp
 import streamlit as st
@@ -79,6 +81,17 @@ def parsear_funcion(texto):
     return expr
 
 
+# ---------------- Valor exacto (opcional) ----------------
+def leer_valor_exacto(texto):
+    texto = texto.strip().replace(",", ".")
+    if not texto:
+        return None
+    try:
+        return float(Fraction(texto))
+    except (ValueError, ZeroDivisionError):
+        raise ValueError("El valor exacto debe ser un número (ej. 0.3333 o 1/3).")
+
+
 # ---------------- Gráfica ----------------
 def graficar(f_vec, a, b, N, metodo, resultado):
     fig, ax = plt.subplots(figsize=(9, 5))
@@ -138,6 +151,10 @@ with st.sidebar:
     N = st.number_input("Número de subintervalos N", min_value=1,
                         max_value=100000, value=6, step=1)
     nombre = st.selectbox("Método", list(METODOS.keys()))
+    valor_exacto_txt = st.text_input(
+        "Valor exacto (opcional)", value="",
+        help="Si lo ingresas, se mostrará el error absoluto. "
+             "Acepta decimales o fracciones como 1/3.")
     calcular = st.button("Calcular", type="primary")
 
 if calcular:
@@ -146,6 +163,8 @@ if calcular:
 
         if a >= b:
             raise ValueError("El límite inferior debe ser menor que el superior.")
+
+        exacto = leer_valor_exacto(valor_exacto_txt)
 
         N = int(N)
         f = sp.lambdify(x, expr, modules=["numpy"])
@@ -167,12 +186,9 @@ if calcular:
         col1, col2 = st.columns(2)
         col1.metric("Integral aproximada", f"{resultado:.10f}")
 
-        try:
-            exacto = float(sp.integrate(expr, (x, a, b)))
-            col2.metric("Error absoluto", f"{abs(exacto - resultado):.3e}")
-            st.write(f"Valor exacto (sympy): **{exacto:.10f}**")
-        except Exception:
-            st.info("No se pudo calcular el valor exacto para comparar.")
+        if exacto is not None:
+            col2.metric("Error absoluto", f"{abs(resultado - exacto):.3e}")
+            st.write(f"Valor exacto ingresado: **{exacto:.10f}**")
 
         st.latex(r"\int_{%s}^{%s} %s \, dx" % (a, b, sp.latex(expr)))
         st.write(f"**Método:** {nombre}  |  **N:** {N}  |  "
